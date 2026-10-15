@@ -17,5 +17,6 @@
 const LINKS = {
   "test1": "https://www.mbari.org/",
   // "tides1": "https://tidesandcurrents.noaa.gov/",
+  "density": {"url": "https://docs.google.com/document/d/18Mq0cRe1q_cT5vb06gDe6dRZzpwHwEm4oULtkhnpoWc/edit?tab=t.0", "added": "2026-10-15", "note": "Density Simulation"},
   // paste new links above this line
 };
