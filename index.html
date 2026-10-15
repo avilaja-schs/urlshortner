@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Link Maker</title>
+<!--
+  LINK MAKER — a helper page for YOU (the teacher).
+  It does NOT save anything by itself. It builds the exact line to paste
+  into links.js, and checks that your code is valid and not already used.
+-->
+<style>
+  :root { --bg:#f6f8fa; --card:#fff; --ink:#1b1f24; --muted:#57606a; --line:#d0d7de;
+          --accent:#0a6ebd; --ok:#1a7f37; --bad:#cf222e; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0d1117; --card:#161b22; --ink:#e6edf3; --muted:#9da7b3; --line:#30363d;
+            --accent:#58a6ff; --ok:#3fb950; --bad:#f85149; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+         font:17px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; padding:16px; }
+  main { max-width:640px; margin:24px auto; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:22px; margin-bottom:16px; }
+  h1 { font-size:1.5rem; margin:0 0 4px; }
+  h2 { font-size:1.1rem; margin:0 0 12px; }
+  .sub { color:var(--muted); margin:0 0 16px; }
+  label { display:block; font-weight:600; margin:14px 0 6px; }
+  .hint { font-weight:400; color:var(--muted); font-size:.9rem; }
+  input { width:100%; font:inherit; padding:10px 12px; border:1px solid var(--line); border-radius:8px;
+          background:var(--bg); color:var(--ink); }
+  input:focus, button:focus-visible { outline:3px solid var(--accent); outline-offset:2px; }
+  .row { display:flex; gap:8px; }
+  .row input { flex:1; }
+  button { font:inherit; font-weight:600; padding:10px 16px; border-radius:8px; border:1px solid var(--line);
+           background:var(--bg); color:var(--ink); cursor:pointer; }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .status { min-height:1.5em; margin-top:8px; font-weight:600; }
+  .status.ok { color:var(--ok); } .status.bad { color:var(--bad); }
+  pre { background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:12px;
+        white-space:pre-wrap; word-break:break-all; margin:6px 0; font-size:.95rem; }
+  .big { font-size:1.3rem; font-weight:700; color:var(--accent); word-break:break-all; }
+  ol { padding-left:1.2em; margin:8px 0 0; } li { margin:4px 0; }
+  table { width:100%; border-collapse:collapse; font-size:.95rem; }
+  td, th { text-align:left; padding:6px 4px; border-bottom:1px solid var(--line); vertical-align:top; }
+  td.url { word-break:break-all; color:var(--muted); }
+  [hidden] { display:none !important; }
+</style>
+<script src="links.js"></script>
+</head>
+<body>
+<main>
+  <section class="card">
+    <h1>Link Maker</h1>
+    <p class="sub">Make a short link. Codes use only lowercase letters and numbers.</p>
+
+    <label for="url">1. Long link <span class="hint">(paste the full address)</span></label>
+    <input id="url" type="url" placeholder="https://..." autocomplete="off">
+
+    <label for="code">2. Short code <span class="hint">(type your own, or click Random)</span></label>
+    <div class="row">
+      <input id="code" type="text" placeholder="e.g. tides1" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="30">
+      <button id="random" type="button">Random</button>
+    </div>
+    <div id="codeStatus" class="status" aria-live="polite"></div>
+
+    <div style="margin-top:16px"><button id="make" class="primary" type="button">Make my link</button></div>
+    <div id="makeStatus" class="status" aria-live="polite"></div>
+  </section>
+
+  <section id="result" class="card" hidden aria-live="polite">
+    <h2>Your short link (works after step 3)</h2>
+    <div class="big" id="shortUrl"></div>
+    <button id="copyShort" type="button" style="margin-top:8px">Copy short link</button>
+
+    <h2 style="margin-top:20px">Line to paste into links.js</h2>
+    <pre id="line"></pre>
+    <button id="copyLine" type="button">Copy line</button>
+    <ol>
+      <li>On GitHub, open <b>links.js</b> and click the pencil ✏️ to edit.</li>
+      <li>Paste the line just above <code>// paste new links above this line</code>.</li>
+      <li>Click <b>Commit changes</b>. Wait about 1 minute, then test the link.</li>
+    </ol>
+  </section>
+
+  <section class="card">
+    <h2>Links you already have</h2>
+    <table><thead><tr><th>Code</th><th>Goes to</th></tr></thead><tbody id="list"></tbody></table>
+  </section>
+</main>
+
+<script>
+  // ---- Settings -------------------------------------------------------
+  // Random codes skip look-alike characters (0/o, 1/l/i) so students
+  // don't mistype them when copying from the board. Custom codes may use any a-z 0-9.
+  const RANDOM_CHARS = "abcdefghjkmnpqrstuvwxyz23456789";
+  const RANDOM_LENGTH = 5;           // 31^5 ≈ 28 million possible codes
+  const VALID_CODE = /^[a-z0-9]+$/;  // lowercase letters + numbers only
+  // Reserved: names of real files in this site, so a code can't hide them.
+  const RESERVED = ["index", "links", "404", "readme", "cname"];
+
+  // Short-link base = whatever address this page is on (works for
+  // scavila.github.io now, and scavila.com later with no changes).
+  const BASE = location.origin + location.pathname.replace(/[^/]*$/, "");
+  const existing = (typeof LINKS === "object" && LINKS) ? LINKS : {};
+
+  const $ = id => document.getElementById(id);
+
+  function randomCode() {
+    // crypto.getRandomValues = good-quality randomness built into browsers
+    let code;
+    do {
+      const nums = crypto.getRandomValues(new Uint32Array(RANDOM_LENGTH));
+      code = Array.from(nums, n => RANDOM_CHARS[n % RANDOM_CHARS.length]).join("");
+    } while (code in existing); // never hand out a code that's taken
+    return code;
+  }
+
+  // Returns an error message, or "" if the code is fine.
+  function checkCode(code) {
+    if (!code) return "Type a code or click Random.";
+    if (!VALID_CODE.test(code)) return "Use only lowercase letters a–z and numbers 0–9 (no spaces or symbols).";
+    if (RESERVED.includes(code)) return `"${code}" is reserved. Pick a different code.`;
+    if (Object.prototype.hasOwnProperty.call(existing, code)) return `"${code}" is already used. Pick a different code.`;
+    return "";
+  }
+
+  function showStatus(el, text, ok) {
+    el.textContent = text;
+    el.className = "status " + (text ? (ok ? "ok" : "bad") : "");
+  }
+
+  // As you type: auto-lowercase and give instant feedback.
+  $("code").addEventListener("input", () => {
+    const box = $("code");
+    const lower = box.value.toLowerCase();
+    if (box.value !== lower) box.value = lower;
+    const err = box.value ? checkCode(box.value) : "";
+    showStatus($("codeStatus"), err || (box.value ? "✓ Code is available" : ""), !err);
+  });
+
+  $("random").addEventListener("click", () => {
+    $("code").value = randomCode();
+    $("code").dispatchEvent(new Event("input"));
+  });
+
+  $("make").addEventListener("click", () => {
+    const url = $("url").value.trim();
+    const code = $("code").value.trim();
+    // The URL must be a real web address starting with http:// or https://
+    let okUrl = false;
+    try { okUrl = ["http:", "https:"].includes(new URL(url).protocol); } catch (e) {}
+    if (!okUrl) { showStatus($("makeStatus"), "Paste a full link that starts with https://", false); $("url").focus(); return; }
+    const err = checkCode(code);
+    if (err) { showStatus($("makeStatus"), err, false); $("code").focus(); return; }
+
+    showStatus($("makeStatus"), "", true);
+    $("shortUrl").textContent = BASE + code;
+    // JSON.stringify safely adds quotes and escapes any odd characters in the URL
+    $("line").textContent = `  ${JSON.stringify(code)}: ${JSON.stringify(url)},`;
+    $("result").hidden = false;
+    $("result").scrollIntoView({ behavior: "smooth" });
+  });
+
+  function copy(text, btn) {
+    navigator.clipboard.writeText(text).then(() => {
+      const old = btn.textContent; btn.textContent = "Copied ✓";
+      setTimeout(() => (btn.textContent = old), 1500);
+    });
+  }
+  $("copyShort").addEventListener("click", e => copy($("shortUrl").textContent, e.target));
+  $("copyLine").addEventListener("click", e => copy($("line").textContent, e.target));
+
+  // Fill the "links you already have" table.
+  const list = $("list");
+  const codes = Object.keys(existing).sort();
+  if (!codes.length) list.innerHTML = "<tr><td colspan=2>None yet.</td></tr>";
+  for (const c of codes) {
+    const tr = document.createElement("tr");
+    const a = document.createElement("td"), b = document.createElement("td");
+    a.textContent = c; b.textContent = existing[c]; b.className = "url";
+    tr.append(a, b); list.append(tr);
+  }
+</script>
+</body>
+</html>
