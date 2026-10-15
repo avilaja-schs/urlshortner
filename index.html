@@ -6,181 +6,567 @@
 <meta name="robots" content="noindex">
 <title>Link Maker</title>
 <!--
-  LINK MAKER — a helper page for YOU (the teacher).
-  It does NOT save anything by itself. It builds the exact line to paste
-  into links.js, and checks that your code is valid and not already used.
+  LINK MAKER
+  ----------
+  Paste a long link -> click Shorten -> this page saves it into links.js on
+  GitHub FOR you (using your one-time "key"), then tells you when it's live.
+
+  How saving works: GitHub lets a web page change files in your repository
+  if it has a "fine-grained personal access token" (we call it the key).
+  The key is kept ONLY in this browser on this computer (localStorage).
+  It is never written into any file, so students can't see it.
+
+  links.js is still the real list of links. 404.html reads it to redirect.
 -->
 <style>
   :root { --bg:#f6f8fa; --card:#fff; --ink:#1b1f24; --muted:#57606a; --line:#d0d7de;
-          --accent:#0a6ebd; --ok:#1a7f37; --bad:#cf222e; }
+          --accent:#0a6ebd; --ok:#1a7f37; --bad:#cf222e; --mark:#fff3b0; }
   @media (prefers-color-scheme: dark) {
     :root { --bg:#0d1117; --card:#161b22; --ink:#e6edf3; --muted:#9da7b3; --line:#30363d;
-            --accent:#58a6ff; --ok:#3fb950; --bad:#f85149; }
+            --accent:#58a6ff; --ok:#3fb950; --bad:#f85149; --mark:#5a4a00; }
   }
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--ink);
          font:17px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; padding:16px; }
-  main { max-width:640px; margin:24px auto; }
+  main { max-width:820px; margin:24px auto; }
   .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:22px; margin-bottom:16px; }
   h1 { font-size:1.5rem; margin:0 0 4px; }
-  h2 { font-size:1.1rem; margin:0 0 12px; }
+  h2 { font-size:1.15rem; margin:0 0 12px; }
   .sub { color:var(--muted); margin:0 0 16px; }
   label { display:block; font-weight:600; margin:14px 0 6px; }
   .hint { font-weight:400; color:var(--muted); font-size:.9rem; }
   input { width:100%; font:inherit; padding:10px 12px; border:1px solid var(--line); border-radius:8px;
           background:var(--bg); color:var(--ink); }
-  input:focus, button:focus-visible { outline:3px solid var(--accent); outline-offset:2px; }
-  .row { display:flex; gap:8px; }
-  .row input { flex:1; }
+  input:focus, button:focus-visible, summary:focus-visible { outline:3px solid var(--accent); outline-offset:2px; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; }
+  .row input { flex:1; min-width:160px; }
   button { font:inherit; font-weight:600; padding:10px 16px; border-radius:8px; border:1px solid var(--line);
            background:var(--bg); color:var(--ink); cursor:pointer; }
   button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  button.small { padding:4px 10px; font-size:.85rem; }
+  button:disabled { opacity:.6; cursor:wait; }
   .status { min-height:1.5em; margin-top:8px; font-weight:600; }
-  .status.ok { color:var(--ok); } .status.bad { color:var(--bad); }
-  pre { background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:12px;
-        white-space:pre-wrap; word-break:break-all; margin:6px 0; font-size:.95rem; }
-  .big { font-size:1.3rem; font-weight:700; color:var(--accent); word-break:break-all; }
-  ol { padding-left:1.2em; margin:8px 0 0; } li { margin:4px 0; }
+  .status.ok { color:var(--ok); } .status.bad { color:var(--bad); } .status.wait { color:var(--muted); }
+  .big { font-size:1.35rem; font-weight:700; color:var(--accent); word-break:break-all; margin:4px 0 10px; }
+  ol { padding-left:1.3em; margin:8px 0; } li { margin:6px 0; }
+  code { background:var(--bg); border:1px solid var(--line); padding:1px 6px; border-radius:5px; font-size:.92em; }
+  details summary { cursor:pointer; font-weight:700; font-size:1.1rem; }
+  .pill { display:inline-block; padding:2px 10px; border-radius:99px; font-size:.85rem; font-weight:700;
+          border:1px solid currentColor; }
+  .pill.ok { color:var(--ok); } .pill.bad { color:var(--bad); }
+
+  /* --- link list --- */
+  .listhead { display:flex; justify-content:space-between; align-items:baseline; gap:8px; flex-wrap:wrap; }
+  #count { color:var(--muted); font-size:.95rem; }
+  .search { position:relative; margin:4px 0 12px; }
+  .search input { padding-left:38px; font-size:1.05rem; }
+  .search svg { position:absolute; left:12px; top:50%; transform:translateY(-50%); color:var(--muted); }
   table { width:100%; border-collapse:collapse; font-size:.95rem; }
-  td, th { text-align:left; padding:6px 4px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { text-align:left; padding:8px 6px; border-bottom:2px solid var(--line); white-space:nowrap; }
+  th button { all:unset; cursor:pointer; font-weight:700; }
+  th button:focus-visible { outline:3px solid var(--accent); }
+  td { padding:8px 6px; border-bottom:1px solid var(--line); vertical-align:top; }
+  td.code { font-weight:700; white-space:nowrap; }
   td.url { word-break:break-all; color:var(--muted); }
+  td.url a { color:inherit; }
+  td.date { white-space:nowrap; }
+  .note { color:var(--ink); display:block; }
+  mark { background:var(--mark); color:inherit; border-radius:3px; }
+  .empty { color:var(--muted); text-align:center; padding:18px; }
+  @media (max-width:600px) {               /* phones: each row becomes a small card */
+    thead { display:none; }
+    table, tbody, tr, td { display:block; width:100%; }
+    tr { border-bottom:1px solid var(--line); padding:8px 0; }
+    td { border:0; padding:2px 0; }
+  }
   [hidden] { display:none !important; }
 </style>
-<script src="links.js"></script>
 </head>
 <body>
 <main>
+  <!-- ============ 1. SHORTEN ============ -->
   <section class="card">
     <h1>Link Maker</h1>
-    <p class="sub">Make a short link. Codes use only lowercase letters and numbers.</p>
+    <p class="sub">Paste a long link and click <b>Shorten</b>. It's saved for you automatically.</p>
 
-    <label for="url">1. Long link <span class="hint">(paste the full address)</span></label>
+    <label for="url">Long link</label>
     <input id="url" type="url" placeholder="https://..." autocomplete="off">
 
-    <label for="code">2. Short code <span class="hint">(type your own, or click Random)</span></label>
+    <label for="code">Short code <span class="hint">(optional — leave blank and one is made for you)</span></label>
     <div class="row">
-      <input id="code" type="text" placeholder="e.g. tides1" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="30">
+      <input id="code" type="text" placeholder="e.g. density" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="30">
       <button id="random" type="button">Random</button>
     </div>
     <div id="codeStatus" class="status" aria-live="polite"></div>
 
-    <div style="margin-top:16px"><button id="make" class="primary" type="button">Make my link</button></div>
+    <label for="note">Note <span class="hint">(optional — helps you search later, e.g. "Period 3 density lab")</span></label>
+    <input id="note" type="text" maxlength="120" autocomplete="off">
+
+    <div style="margin-top:16px"><button id="make" class="primary" type="button">Shorten</button></div>
     <div id="makeStatus" class="status" aria-live="polite"></div>
+
+    <div id="result" hidden>
+      <div class="big" id="shortUrl"></div>
+      <button id="copyShort" type="button">Copy short link</button>
+      <div id="liveStatus" class="status wait" aria-live="polite"></div>
+    </div>
   </section>
 
-  <section id="result" class="card" hidden aria-live="polite">
-    <h2>Your short link (works after step 3)</h2>
-    <div class="big" id="shortUrl"></div>
-    <button id="copyShort" type="button" style="margin-top:8px">Copy short link</button>
-
-    <h2 style="margin-top:20px">Line to paste into links.js</h2>
-    <pre id="line"></pre>
-    <button id="copyLine" type="button">Copy line</button>
-    <ol>
-      <li>On GitHub, open <b>links.js</b> and click the pencil ✏️ to edit.</li>
-      <li>Paste the line just above <code>// paste new links above this line</code>.</li>
-      <li>Click <b>Commit changes</b>. Wait about 1 minute, then test the link.</li>
-    </ol>
-  </section>
-
+  <!-- ============ 2. MY LINKS ============ -->
   <section class="card">
-    <h2>Links you already have</h2>
-    <table><thead><tr><th>Code</th><th>Goes to</th></tr></thead><tbody id="list"></tbody></table>
+    <div class="listhead">
+      <h2>My links</h2>
+      <span id="count" aria-live="polite"></span>
+    </div>
+    <div class="search">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+      <input id="search" type="search" placeholder="Search by code, link, note, or date (e.g. oct 2026)" aria-label="Search my links" autocomplete="off">
+    </div>
+    <table>
+      <thead><tr>
+        <th><button type="button" data-sort="code">Code</button></th>
+        <th>Goes to</th>
+        <th><button type="button" data-sort="added">Date added</button></th>
+        <th aria-label="Copy"></th>
+      </tr></thead>
+      <tbody id="list"></tbody>
+    </table>
+  </section>
+
+  <!-- ============ 3. ONE-TIME SETUP ============ -->
+  <section class="card">
+    <details id="setup">
+      <summary>Auto-save setup (one time) <span id="keyPill" class="pill bad">Not set up</span></summary>
+      <p>This lets the page save links to GitHub for you. Do it once, on <b>your own</b> computer.
+         The key stays only in this browser — it is not saved in any file students can see.</p>
+      <ol>
+        <li>Open <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">github.com/settings/personal-access-tokens/new</a> (sign in if asked).</li>
+        <li><b>Token name:</b> <code>Link Maker</code>. <b>Expiration:</b> pick the longest choice (or "No expiration").</li>
+        <li><b>Repository access:</b> choose <b>Only select repositories</b>, then pick <b>urlshortner</b> (the repository this site is in).</li>
+        <li><b>Permissions:</b> click <b>Add permissions</b> (or open <i>Repository permissions</i>), choose <b>Contents</b>, and set it to <b>Read and write</b>.</li>
+        <li>Click <b>Generate token</b>. Copy the key (it starts with <code>github_pat_</code>). GitHub shows it only once.</li>
+        <li>Paste it below and click <b>Save key</b>.</li>
+      </ol>
+      <div class="row">
+        <input id="token" type="password" placeholder="github_pat_..." autocomplete="off" aria-label="GitHub key">
+        <button id="saveKey" class="primary" type="button">Save key</button>
+        <button id="forgetKey" type="button">Forget key</button>
+      </div>
+      <div id="keyStatus" class="status" aria-live="polite"></div>
+    </details>
   </section>
 </main>
 
 <script>
-  // ---- Settings -------------------------------------------------------
-  // Random codes skip look-alike characters (0/o, 1/l/i) so students
-  // don't mistype them when copying from the board. Custom codes may use any a-z 0-9.
-  const RANDOM_CHARS = "abcdefghjkmnpqrstuvwxyz23456789";
-  const RANDOM_LENGTH = 5;           // 31^5 ≈ 28 million possible codes
-  const VALID_CODE = /^[a-z0-9]+$/;  // lowercase letters + numbers only
-  // Reserved: names of real files in this site, so a code can't hide them.
-  const RESERVED = ["index", "links", "404", "readme", "cname"];
+/* =========================================================================
+   SETTINGS
+   ========================================================================= */
+// Random codes skip look-alike characters (0/o, 1/l/i) so students don't
+// mistype them when copying from the board.
+const RANDOM_CHARS = "abcdefghjkmnpqrstuvwxyz23456789";
+const RANDOM_LENGTH = 5;            // 31^5 ≈ 28 million possible codes
+const VALID_CODE = /^[a-z0-9]+$/;   // lowercase letters + numbers only
+const RESERVED = ["index", "links", "404", "readme", "cname"]; // real file names
+const MARKER = "// paste new links above this line";  // new links go above this line
+const STORE = "linkmaker.v1";       // name used for this browser's saved settings
 
-  // Short-link base = whatever address this page is on (works for
-  // scavila.github.io now, and scavila.com later with no changes).
-  const BASE = location.origin + location.pathname.replace(/[^/]*$/, "");
-  const existing = (typeof LINKS === "object" && LINKS) ? LINKS : {};
+// The short-link base is the folder this page lives in, e.g.
+// https://avilaja-schs.github.io/urlshortner/  (works on a custom domain later too)
+const BASE = location.origin + location.pathname.replace(/[^/]*$/, "");
 
-  const $ = id => document.getElementById(id);
+// Starting text for links.js if it doesn't exist yet in the repository.
+const TEMPLATE = `// =====================================================================
+//  links.js — the list of short links. The Link Maker page adds to it
+//  for you. Each line:
+//  "code": {"url": "https://...", "added": "YYYY-MM-DD", "note": "..."},
+// =====================================================================
 
-  function randomCode() {
-    // crypto.getRandomValues = good-quality randomness built into browsers
-    let code;
-    do {
-      const nums = crypto.getRandomValues(new Uint32Array(RANDOM_LENGTH));
-      code = Array.from(nums, n => RANDOM_CHARS[n % RANDOM_CHARS.length]).join("");
-    } while (code in existing); // never hand out a code that's taken
-    return code;
+const LINKS = {
+  ${MARKER}
+};
+`;
+
+/* =========================================================================
+   SMALL HELPERS
+   ========================================================================= */
+const $ = id => document.getElementById(id);
+const hasOwn = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+
+// Saved settings for THIS browser only. try/catch because some browsers
+// (private windows) block storage — the page still works, it just won't remember.
+function loadSettings() { try { return JSON.parse(localStorage.getItem(STORE)) || {}; } catch (e) { return {}; } }
+function saveSettings(s) { try { localStorage.setItem(STORE, JSON.stringify(s)); } catch (e) {} }
+let settings = loadSettings();   // { token, owner, repo, path }
+
+function showStatus(el, text, kind) {           // kind: "ok" | "bad" | "wait"
+  el.textContent = text;
+  el.className = "status " + (text ? kind : "");
+}
+
+// Today's date in YOUR time zone as YYYY-MM-DD (toISOString would use UTC
+// and could show tomorrow's date in the evening).
+function today() {
+  const d = new Date(), pad = n => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+// "2026-10-15" -> "Oct 15, 2026"
+function prettyDate(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || "");
+  if (!m) return iso || "—";
+  return new Date(+m[1], +m[2] - 1, +m[3])
+    .toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+// GitHub sends file contents as base64. These convert safely, including
+// emoji or accented letters in notes (plain atob/btoa would break on those).
+function toBase64(text) {
+  let bin = ""; new TextEncoder().encode(text).forEach(b => (bin += String.fromCharCode(b)));
+  return btoa(bin);
+}
+function fromBase64(b64) {
+  const bin = atob(b64.replace(/\s/g, ""));
+  return new TextDecoder().decode(Uint8Array.from(bin, c => c.charCodeAt(0)));
+}
+
+// Read the LINKS table out of the text of links.js. Returns null if broken.
+function parseLinks(text) {
+  try { const t = new Function(text + "\n;return typeof LINKS === 'object' ? LINKS : null;")(); return t || null; }
+  catch (e) { return null; }
+}
+
+/* =========================================================================
+   TALKING TO GITHUB
+   ========================================================================= */
+async function gh(path, options = {}) {
+  const res = await fetch("https://api.github.com" + path, {
+    ...options,
+    headers: {
+      "Accept": "application/vnd.github+json",
+      "Authorization": "Bearer " + settings.token,
+      "X-GitHub-Api-Version": "2022-11-28",
+      ...(options.body ? { "Content-Type": "application/json" } : {})
+    },
+    cache: "no-store"
+  });
+  return res;
+}
+
+// Plain-language messages for GitHub errors.
+function ghError(res) {
+  if (res.status === 401) return "Your key didn't work (it may be mistyped or expired). Make a new one in Auto-save setup below.";
+  if (res.status === 403) return "Your key can't save. In the key's settings, Contents must be set to \"Read and write\".";
+  if (res.status === 404) return "Your key can't see this repository. Make sure you picked the right repository when making the key.";
+  return `GitHub said "${res.status}". Try again in a minute.`;
+}
+
+// Figure out which repository + folder this page lives in, from its address.
+//   avilaja-schs.github.io/urlshortner/        -> repo "urlshortner", file "links.js"
+//   avilaja-schs.github.io/                    -> repo "avilaja-schs.github.io"
+//   avilaja-schs.github.io/tools/urlshortner/  -> repo "tools", file "urlshortner/links.js"
+//     or the user site with folder "tools/urlshortner/" — we ask GitHub which one exists.
+async function findRepo() {
+  const owner = location.hostname.split(".")[0];
+  if (!location.hostname.endsWith(".github.io")) throw new Error("This page isn't on github.io, so auto-save can't find the repository.");
+  const segs = location.pathname.replace(/[^/]*$/, "").split("/").filter(Boolean);
+  const tries = [];
+  if (segs.length) tries.push({ repo: segs[0], dir: segs.slice(1) });  // project site
+  tries.push({ repo: owner + ".github.io", dir: segs });               // user site
+  let last;
+  for (const t of tries) {
+    last = await gh(`/repos/${owner}/${t.repo}`);
+    if (last.ok) return { owner, repo: t.repo, path: [...t.dir, "links.js"].join("/") };
+  }
+  throw new Error(ghError(last));
+}
+
+// Get links.js from GitHub: { text, sha } (sha = null if the file doesn't exist yet)
+async function readLinksFile() {
+  const res = await gh(`/repos/${settings.owner}/${settings.repo}/contents/${settings.path}`);
+  if (res.status === 404) return { text: TEMPLATE, sha: null };
+  if (!res.ok) throw new Error(ghError(res));
+  const data = await res.json();
+  return { text: fromBase64(data.content), sha: data.sha };
+}
+
+// Put one new line into the text of links.js, just above the marker line.
+function insertLine(text, line) {
+  let at = text.indexOf(MARKER);
+  if (at !== -1) at = text.lastIndexOf("\n", at) + 1;      // start of the marker's line
+  else {
+    at = text.lastIndexOf("};");                           // no marker: before the closing };
+    if (at === -1) return null;
+    at = text.lastIndexOf("\n", at) + 1;
+  }
+  // If the entry right above is missing its comma, add one (a common hand-edit slip).
+  let before = text.slice(0, at);
+  const lines = before.split("\n");
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const t = lines[i].trim();
+    if (!t || t.startsWith("//")) continue;                 // skip blank lines and comments
+    if (!t.endsWith(",") && !t.endsWith("{")) lines[i] = lines[i].replace(/\s*$/, ",");
+    break;
+  }
+  before = lines.join("\n");
+  return before + line + "\n" + text.slice(at);
+}
+
+/* =========================================================================
+   SHORTEN + SAVE
+   ========================================================================= */
+let current = {};   // the latest LINKS table we know about
+
+function randomCode(taken) {
+  let code;
+  do {
+    const nums = crypto.getRandomValues(new Uint32Array(RANDOM_LENGTH));
+    code = Array.from(nums, n => RANDOM_CHARS[n % RANDOM_CHARS.length]).join("");
+  } while (hasOwn(taken, code) || RESERVED.includes(code));
+  return code;
+}
+
+function checkCode(code, taken) {
+  if (!VALID_CODE.test(code)) return "Use only lowercase letters a–z and numbers 0–9 (no spaces or symbols).";
+  if (RESERVED.includes(code)) return `"${code}" is reserved. Pick a different code.`;
+  if (hasOwn(taken, code)) return `"${code}" is already used. Pick a different code.`;
+  return "";
+}
+
+$("code").addEventListener("input", () => {
+  const box = $("code");
+  const lower = box.value.toLowerCase();
+  if (box.value !== lower) box.value = lower;
+  if (!box.value) return showStatus($("codeStatus"), "", "");
+  const err = checkCode(box.value, current);
+  showStatus($("codeStatus"), err || "✓ Code is available", err ? "bad" : "ok");
+});
+
+$("random").addEventListener("click", () => {
+  $("code").value = randomCode(current);
+  $("code").dispatchEvent(new Event("input"));
+});
+
+$("make").addEventListener("click", async () => {
+  const url = $("url").value.trim();
+  let code = $("code").value.trim();
+  const note = $("note").value.trim();
+  const status = $("makeStatus");
+  $("result").hidden = true;
+
+  let okUrl = false;
+  try { okUrl = ["http:", "https:"].includes(new URL(url).protocol); } catch (e) {}
+  if (!okUrl) { showStatus(status, "Paste a full link that starts with https://", "bad"); $("url").focus(); return; }
+
+  if (!settings.token) {
+    showStatus(status, "Auto-save isn't set up yet. Follow the one-time steps below.", "bad");
+    $("setup").open = true; $("setup").scrollIntoView({ behavior: "smooth" });
+    return;
   }
 
-  // Returns an error message, or "" if the code is fine.
-  function checkCode(code) {
-    if (!code) return "Type a code or click Random.";
-    if (!VALID_CODE.test(code)) return "Use only lowercase letters a–z and numbers 0–9 (no spaces or symbols).";
-    if (RESERVED.includes(code)) return `"${code}" is reserved. Pick a different code.`;
-    if (Object.prototype.hasOwnProperty.call(existing, code)) return `"${code}" is already used. Pick a different code.`;
-    return "";
-  }
+  const btn = $("make"); btn.disabled = true;
+  try {
+    // Up to 3 tries, in case links.js changed at the same moment (GitHub says 409).
+    for (let attempt = 1; ; attempt++) {
+      showStatus(status, "Saving…", "wait");
+      const file = await readLinksFile();
+      const table = parseLinks(file.text);
+      if (!table) throw new Error("links.js has a typo in it, so I stopped to keep it safe. Open it on GitHub and check the last line you changed.");
+      current = table; renderList();
 
-  function showStatus(el, text, ok) {
-    el.textContent = text;
-    el.className = "status " + (text ? (ok ? "ok" : "bad") : "");
-  }
+      if (!code) code = randomCode(table);                // blank = make one
+      const err = checkCode(code, table);
+      if (err) { showStatus(status, err, "bad"); $("code").focus(); return; }
 
-  // As you type: auto-lowercase and give instant feedback.
-  $("code").addEventListener("input", () => {
-    const box = $("code");
-    const lower = box.value.toLowerCase();
-    if (box.value !== lower) box.value = lower;
-    const err = box.value ? checkCode(box.value) : "";
-    showStatus($("codeStatus"), err || (box.value ? "✓ Code is available" : ""), !err);
+      const entry = { url, added: today() };
+      if (note) entry.note = note;
+      // JSON.stringify adds quotes and escapes odd characters safely.
+      const line = `  ${JSON.stringify(code)}: ${JSON.stringify(entry).replace(/","/g, '", "').replace(/":"/g, '": "')},`;
+      const newText = insertLine(file.text, line);
+      const check = newText && parseLinks(newText);
+      if (!check || !hasOwn(check, code)) throw new Error("Couldn't add the line to links.js safely. Nothing was changed.");
+
+      const res = await gh(`/repos/${settings.owner}/${settings.repo}/contents/${settings.path}`, {
+        method: "PUT",
+        body: JSON.stringify({ message: `Add short link: ${code}`, content: toBase64(newText), ...(file.sha ? { sha: file.sha } : {}) })
+      });
+      if ((res.status === 409 || res.status === 422) && attempt < 3) continue;
+      if (!res.ok) throw new Error(ghError(res));
+
+      // Saved!
+      current = check; renderList();
+      showStatus(status, "✓ Saved", "ok");
+      $("shortUrl").textContent = BASE + code;
+      $("result").hidden = false;
+      $("url").value = ""; $("code").value = ""; $("note").value = "";
+      showStatus($("codeStatus"), "", "");
+      waitUntilLive(code);
+      return;
+    }
+  } catch (e) {
+    showStatus(status, e.message || "Something went wrong. Check your internet and try again.", "bad");
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// GitHub takes about a minute to publish. Check the live links.js every
+// 10 seconds and say when the new link actually works.
+let liveTimer = null;
+function waitUntilLive(code) {
+  clearTimeout(liveTimer);
+  const el = $("liveStatus"), started = Date.now();
+  showStatus(el, "Publishing… GitHub usually takes about 1 minute. You can copy the link now.", "wait");
+  const check = async () => {
+    try {
+      const res = await fetch(`links.js?v=${Date.now()}`, { cache: "no-store" });
+      const t = res.ok ? await res.text() : "";
+      const live = parseLinks(t);
+      if (live && hasOwn(live, code)) return showStatus(el, "✓ Live now — the link works.", "ok");
+    } catch (e) {}
+    if (Date.now() - started > 5 * 60 * 1000)
+      return showStatus(el, "Still publishing — GitHub is slow right now. It should work within a few minutes.", "wait");
+    liveTimer = setTimeout(check, 10000);
+  };
+  liveTimer = setTimeout(check, 10000);
+}
+
+function copy(text, btn) {
+  navigator.clipboard.writeText(text).then(() => {
+    const old = btn.textContent; btn.textContent = "Copied ✓";
+    setTimeout(() => (btn.textContent = old), 1500);
+  });
+}
+$("copyShort").addEventListener("click", e => copy($("shortUrl").textContent, e.target));
+
+/* =========================================================================
+   KEY SETUP
+   ========================================================================= */
+function showKeyState() {
+  const on = !!settings.token;
+  $("keyPill").textContent = on ? "✓ Ready" : "Not set up";
+  $("keyPill").className = "pill " + (on ? "ok" : "bad");
+  $("forgetKey").hidden = !on;
+  if (on) showStatus($("keyStatus"), `Saving to ${settings.owner}/${settings.repo} → ${settings.path}`, "ok");
+}
+
+$("saveKey").addEventListener("click", async () => {
+  const token = $("token").value.trim();
+  if (!token) return showStatus($("keyStatus"), "Paste your key first.", "bad");
+  showStatus($("keyStatus"), "Checking your key…", "wait");
+  const old = settings;
+  settings = { token };
+  try {
+    Object.assign(settings, await findRepo());
+    saveSettings(settings);
+    $("token").value = "";
+    showKeyState();
+    loadList();
+  } catch (e) {
+    settings = old;
+    showStatus($("keyStatus"), e.message, "bad");
+  }
+});
+
+$("forgetKey").addEventListener("click", () => {
+  settings = {}; saveSettings(settings); showKeyState();
+  showStatus($("keyStatus"), "Key removed from this browser.", "ok");
+});
+
+/* =========================================================================
+   MY LINKS LIST (search + sort)
+   ========================================================================= */
+let sortBy = "added", sortDir = -1;   // newest first
+
+function rowsFrom(table) {
+  return Object.keys(table).map(code => {
+    const v = table[code];
+    return typeof v === "string"
+      ? { code, url: v, added: "", note: "" }                  // old-style line
+      : { code, url: v.url || "", added: v.added || "", note: v.note || "" };
+  });
+}
+
+// Put text into an element with search words highlighted (text nodes only = safe).
+function fillHighlighted(el, text, words) {
+  el.textContent = "";
+  if (!words.length) { el.textContent = text; return; }
+  const lower = text.toLowerCase(), hits = [];
+  for (const w of words) for (let i = lower.indexOf(w); i !== -1; i = lower.indexOf(w, i + w.length)) hits.push([i, i + w.length]);
+  hits.sort((a, b) => a[0] - b[0]);
+  let pos = 0;
+  for (const [s, e] of hits) {
+    if (s < pos) continue;
+    el.append(text.slice(pos, s));
+    const m = document.createElement("mark"); m.textContent = text.slice(s, e); el.append(m);
+    pos = e;
+  }
+  el.append(text.slice(pos));
+}
+
+function renderList() {
+  const all = rowsFrom(current);
+  const words = $("search").value.toLowerCase().split(/\s+/).filter(Boolean);
+  const rows = all.filter(r => {
+    const hay = `${r.code} ${r.url} ${r.note} ${r.added} ${prettyDate(r.added)}`.toLowerCase();
+    return words.every(w => hay.includes(w));
+  }).sort((a, b) => {
+    const x = a[sortBy] || "", y = b[sortBy] || "";
+    return (x < y ? -1 : x > y ? 1 : 0) * sortDir || a.code.localeCompare(b.code);
   });
 
-  $("random").addEventListener("click", () => {
-    $("code").value = randomCode();
-    $("code").dispatchEvent(new Event("input"));
-  });
-
-  $("make").addEventListener("click", () => {
-    const url = $("url").value.trim();
-    const code = $("code").value.trim();
-    // The URL must be a real web address starting with http:// or https://
-    let okUrl = false;
-    try { okUrl = ["http:", "https:"].includes(new URL(url).protocol); } catch (e) {}
-    if (!okUrl) { showStatus($("makeStatus"), "Paste a full link that starts with https://", false); $("url").focus(); return; }
-    const err = checkCode(code);
-    if (err) { showStatus($("makeStatus"), err, false); $("code").focus(); return; }
-
-    showStatus($("makeStatus"), "", true);
-    $("shortUrl").textContent = BASE + code;
-    // JSON.stringify safely adds quotes and escapes any odd characters in the URL
-    $("line").textContent = `  ${JSON.stringify(code)}: ${JSON.stringify(url)},`;
-    $("result").hidden = false;
-    $("result").scrollIntoView({ behavior: "smooth" });
-  });
-
-  function copy(text, btn) {
-    navigator.clipboard.writeText(text).then(() => {
-      const old = btn.textContent; btn.textContent = "Copied ✓";
-      setTimeout(() => (btn.textContent = old), 1500);
-    });
+  $("count").textContent = words.length ? `Showing ${rows.length} of ${all.length}` : `${all.length} link${all.length === 1 ? "" : "s"}`;
+  const list = $("list"); list.textContent = "";
+  if (!rows.length) {
+    const tr = document.createElement("tr"), td = document.createElement("td");
+    td.colSpan = 4; td.className = "empty";
+    td.textContent = all.length ? "No links match your search." : "No links yet.";
+    tr.append(td); list.append(tr);
   }
-  $("copyShort").addEventListener("click", e => copy($("shortUrl").textContent, e.target));
-  $("copyLine").addEventListener("click", e => copy($("line").textContent, e.target));
-
-  // Fill the "links you already have" table.
-  const list = $("list");
-  const codes = Object.keys(existing).sort();
-  if (!codes.length) list.innerHTML = "<tr><td colspan=2>None yet.</td></tr>";
-  for (const c of codes) {
+  const frag = document.createDocumentFragment();
+  for (const r of rows) {
     const tr = document.createElement("tr");
-    const a = document.createElement("td"), b = document.createElement("td");
-    a.textContent = c; b.textContent = existing[c]; b.className = "url";
-    tr.append(a, b); list.append(tr);
+    const tdCode = document.createElement("td"); tdCode.className = "code"; fillHighlighted(tdCode, r.code, words);
+    const tdUrl = document.createElement("td"); tdUrl.className = "url";
+    if (r.note) { const n = document.createElement("span"); n.className = "note"; fillHighlighted(n, r.note, words); tdUrl.append(n); }
+    const a = document.createElement("a"); a.href = r.url; a.target = "_blank"; a.rel = "noopener"; fillHighlighted(a, r.url, words); tdUrl.append(a);
+    const tdDate = document.createElement("td"); tdDate.className = "date"; tdDate.textContent = prettyDate(r.added);
+    const tdBtn = document.createElement("td");
+    const b = document.createElement("button"); b.type = "button"; b.className = "small"; b.textContent = "Copy link";
+    b.setAttribute("aria-label", "Copy short link " + r.code);
+    b.addEventListener("click", () => copy(BASE + r.code, b));
+    tdBtn.append(b);
+    tr.append(tdCode, tdUrl, tdDate, tdBtn); frag.append(tr);
   }
+  list.append(frag);
+  document.querySelectorAll("th button[data-sort]").forEach(btn => {
+    const label = btn.dataset.sort === "code" ? "Code" : "Date added";
+    btn.textContent = label + (btn.dataset.sort === sortBy ? (sortDir === 1 ? " ▲" : " ▼") : "");
+  });
+}
+
+$("search").addEventListener("input", renderList);
+document.querySelectorAll("th button[data-sort]").forEach(btn => btn.addEventListener("click", () => {
+  if (sortBy === btn.dataset.sort) sortDir = -sortDir;
+  else { sortBy = btn.dataset.sort; sortDir = sortBy === "added" ? -1 : 1; }
+  renderList();
+}));
+
+// Load the list: straight from GitHub when the key is set (always up to date),
+// otherwise from the published links.js.
+async function loadList() {
+  try {
+    if (settings.token) { const t = parseLinks((await readLinksFile()).text); if (t) { current = t; return renderList(); } }
+  } catch (e) {}
+  try {
+    const res = await fetch(`links.js?v=${Date.now()}`, { cache: "no-store" });
+    current = (res.ok && parseLinks(await res.text())) || {};
+  } catch (e) { current = {}; }
+  renderList();
+}
+
+showKeyState();
+if (!settings.token) $("setup").open = true;   // first visit: show setup
+loadList();
 </script>
 </body>
 </html>
