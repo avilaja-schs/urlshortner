@@ -8,10 +8,10 @@
 <!--
   HOW THIS WORKS (you don't need to edit this file):
   GitHub Pages shows this page whenever someone visits an address that
-  isn't a real file, like scavila.github.io/test1.
-  The script reads the "test1" part, looks it up in links.js, and sends
-  the visitor to the long address. If the code isn't found, it shows a
-  friendly "link not found" message instead.
+  isn't a real file, like  avilaja-schs.github.io/urlshortner/density
+  The script takes the last part ("density"), loads links.js from the
+  same folder, and sends the visitor to the long address.
+  If the code isn't found, it shows a friendly "link not found" message.
 -->
 <style>
   :root { --bg:#f6f8fa; --card:#fff; --ink:#1b1f24; --muted:#57606a; --accent:#0a6ebd; }
@@ -25,30 +25,22 @@
   h1 { font-size:1.4rem; margin:0 0 .5rem; }
   p { color:var(--muted); margin:.5rem 0; }
   code { background:var(--bg); padding:2px 8px; border-radius:6px; font-size:1.1rem; color:var(--ink); }
-  a { color:var(--accent); }
 </style>
-<script src="/links.js"></script>
 </head>
 <body>
 <main class="card" aria-live="polite">
   <h1 id="title">Opening your link…</h1>
   <p id="msg">One moment.</p>
 </main>
+<noscript><p style="text-align:center">Please turn on JavaScript to open this link.</p></noscript>
 <script>
-  // 1. Take the last part of the address, e.g. "/Test1/" -> "test1".
+  // 1. Split the address. "/urlshortner/Density/" -> folder "/urlshortner/", code "density".
   //    Lowercasing means a student who types capitals still gets there.
   const parts = location.pathname.split("/").filter(Boolean);
-  const code = (parts[parts.length - 1] || "").toLowerCase().trim();
+  const code = (parts.pop() || "").toLowerCase().trim();
+  const folder = "/" + parts.map(p => p + "/").join("");
 
-  // 2. Look it up. (LINKS comes from links.js; guard in case it failed to load.)
-  const table = (typeof LINKS === "object" && LINKS) ? LINKS : {};
-  const target = Object.prototype.hasOwnProperty.call(table, code) ? table[code] : null;
-
-  if (target) {
-    // 3a. Found it: go. replace() keeps the Back button working normally.
-    location.replace(target);
-  } else {
-    // 3b. Not found: show a clear message (textContent = safe, no HTML injection).
+  function notFound() {
     document.title = "Link not found";
     document.getElementById("title").textContent = "Link not found";
     const msg = document.getElementById("msg");
@@ -56,13 +48,29 @@
     if (code) {
       msg.append("We couldn't find the code ");
       const c = document.createElement("code");
-      c.textContent = code;
+      c.textContent = code;                      // textContent = safe, no HTML injection
       msg.append(c, ". Check the spelling and try again, or ask your teacher.");
     } else {
       msg.textContent = "Check the spelling and try again, or ask your teacher.";
     }
   }
+
+  function go() {
+    const table = (typeof LINKS === "object" && LINKS) ? LINKS : {};
+    const entry = Object.prototype.hasOwnProperty.call(table, code) ? table[code] : null;
+    // Entries are {url, added, note}. (Old plain "code": "url" lines also work.)
+    const target = typeof entry === "string" ? entry : (entry && entry.url) || null;
+    if (target) location.replace(target);        // replace() keeps the Back button normal
+    else notFound();
+  }
+
+  // 2. Load links.js from the same folder. The "?v=" + time part skips the
+  //    browser's saved copy, so brand-new links work right away.
+  const s = document.createElement("script");
+  s.src = folder + "links.js?v=" + Date.now();
+  s.onload = go;
+  s.onerror = notFound;
+  document.head.append(s);
 </script>
-<noscript><p style="text-align:center">Please turn on JavaScript to open this link.</p></noscript>
 </body>
 </html>
